@@ -1,9 +1,8 @@
-# NLP-Ki1-2025-2026
-
-Lab 1: Tokenization trong NLP
+NLP-Ki1-2025-2026
 Tổng quan
-Lab 1 tập trung vào việc xây dựng hai công cụ tách từ (tokenizer): SimpleTokenizer và RegexTokenizer, sau đó thử nghiệm chúng trên các câu mẫu và tập dữ liệu UD_English-EWT. Mục tiêu là hiểu cách tách từ, một bước quan trọng trong xử lý ngôn ngữ tự nhiên (NLP).
+Lab 1 và Lab 2 tập trung vào xử lý ngôn ngữ tự nhiên (NLP). Lab 1 xây dựng hai công cụ tách từ (SimpleTokenizer và RegexTokenizer), thử nghiệm trên câu mẫu và tập dữ liệu UD_English-EWT. Lab 2 triển khai CountVectorizer để biểu diễn văn bản thành vector số, dùng RegexTokenizer từ Lab 1.
 Công việc đã làm
+Lab 1: Tách Từ
 
 Tạo giao diện Tokenizer:
 
@@ -12,37 +11,51 @@ Tạo file src/core/interfaces.py với lớp trừu tượng Tokenizer, định
 
 Xây dựng SimpleTokenizer:
 
-Tạo file src/preprocessing/simple_tokenizer.py với lớp SimpleTokenizer.
-Phương thức tokenize:
-Chuyển văn bản thành chữ thường.
-Tách từ theo khoảng trắng.
-Tách dấu câu (như ., ,, ?, !) thành token riêng.
-Ví dụ: "Hello, world!" → ["hello", ",", "world", "!"].
-
-
+Tạo file src/preprocessing/simple_tokenizer.py.
+Tách từ: chuyển chữ thường, tách theo khoảng trắng, tách dấu câu (., ,, ?, !) thành token riêng. Ví dụ: "Hello, world!" → ["hello", ",", "world", "!"].
 
 
 Xây dựng RegexTokenizer:
 
-Tạo file src/preprocessing/regex_tokenizer.py với lớp RegexTokenizer.
-Sử dụng regex (ví dụ: \w+|[^\w\s]) để tách từ và dấu câu chính xác hơn.
+Tạo file src/preprocessing/regex_tokenizer.py.
+Dùng regex (như \w+|[^\w\s]) để tách từ và dấu câu.
 
 
-Xây dựng hàm tải dữ liệu:
+Tải dữ liệu:
 
-Tạo file src/core/dataset_loaders.py với hàm load_raw_text_data để đọc file CoNLL-U (UD_English-EWT).
-Hàm này lấy từ ở cột thứ hai và nối thành chuỗi văn bản.
+Tạo src/core/dataset_loaders.py với hàm load_raw_text_data để đọc file CoNLL-U, lấy từ ở cột thứ hai.
 
 
-Chạy thử nghiệm:
+Thử nghiệm:
 
-Tạo main.py để chạy thử hai tokenizer trên ba câu mẫu và một đoạn 500 ký tự từ UD_English-EWT.
+Tạo main.py để chạy thử trên ba câu mẫu và 500 ký tự từ UD_English-EWT.
+
+
+
+Lab 2: Count Vectorization
+
+Cập nhật giao diện Vectorizer:
+
+Thêm lớp Vectorizer vào src/core/interfaces.py với các phương thức: fit, transform, fit_transform.
+
+
+Xây dựng CountVectorizer:
+
+Tạo file src/representations/count_vectorizer.py.
+Lớp CountVectorizer nhận RegexTokenizer, tạo từ vựng (vocabulary_) và biến văn bản thành ma trận đếm.
+
+
+Thử nghiệm:
+
+Tạo test/lab2_test.py, dùng corpus mẫu:corpus = ["I love NLP.", "I love programming.", "NLP is a subfield of AI."]
+
+
+Chạy fit_transform, in từ vựng và ma trận document-term.
 
 
 
 Kết quả chạy code
-Câu mẫu
-Dưới đây là kết quả khi tách từ ba câu mẫu:
+Lab 1: Câu mẫu
 
 Câu: "Hello, world! This is a test."
 SimpleTokenizer: ['hello', ',', 'world', '!', 'this', 'is', 'a', 'test', '.']
@@ -60,26 +73,43 @@ RegexTokenizer: ['let', "'", 's', 'see', 'how', 'it', 'handles', '123', 'numbers
 
 
 
-Dữ liệu UD_English-EWT
-Phần chạy trên tập dữ liệu gặp lỗi do đường dẫn file không đúng (/data/UD_English-EWT/en_ewt-ud-train.txt). Sau khi sửa thành đường dẫn Windows (ví dụ: C:\Users\Admin\Data\UD_English-EWT\en_ewt-ud-train.txt) và thêm dataset_loaders.py, code sẽ tách từ 500 ký tự đầu và in 20 token đầu tiên. Kết quả cụ thể chưa có do lỗi file lúc chạy thử.
-Phân tích kết quả
-
-So sánh hai tokenizer:
-
-Cả SimpleTokenizer và RegexTokenizer cho kết quả giống nhau trên các câu mẫu. Cả hai đều chuyển chữ hoa thành chữ thường, tách dấu câu và số thành token riêng.
-Với từ rút gọn như "isn't" hay "Let's", cả hai tách thành ['isn', "'", 't'] và ['let', "'", 's']. Điều này đúng về mặt kỹ thuật nhưng chưa tối ưu vì trong NLP, từ như "isn't" thường được giữ nguyên.
-Dấu ba chấm (...) bị tách thành ba dấu chấm riêng (., ., .). Có thể cải thiện để xem ... là một token duy nhất.
+UD_English-EWT: Gặp lỗi do đường dẫn file sai. Đã sửa thành C:\Users\Admin\Data\UD_English-EWT\en_ewt-ud-train.txt và thêm dataset_loaders.py, nhưng chưa có kết quả cụ thể.
+Lab 2: CountVectorizer
+Corpus mẫu:
+corpus = ["I love NLP.", "I love programming.", "NLP is a subfield of AI."]
 
 
-Nhận xét:
+Từ vựng:{'a': 0, 'ai': 1, 'i': 2, 'is': 3, 'love': 4, 'nlp': 5, 'of': 6, 'programming': 7, 'subfield': 8, '.': 9}
 
-Hai tokenizer hoạt động tốt với các câu đơn giản, nhưng RegexTokenizer có tiềm năng xử lý tốt hơn các trường hợp phức tạp (như URL, emoji) nhờ regex.
-Cần thử nghiệm thêm với dữ liệu đa dạng hơn để thấy sự khác biệt.
+
+Ma trận document-term:[[0, 0, 1, 0, 1, 1, 0, 0, 0, 1],  # I love NLP.
+ [0, 0, 1, 0, 1, 0, 0, 1, 0, 1],  # I love programming.
+ [1, 1, 0, 1, 0, 1, 1, 0, 1, 1]]  # NLP is a subfield of AI.
 
 
 
-Cải tiến đề xuất
+Phân tích
 
-Giữ nguyên từ rút gọn như "isn't" bằng cách sửa regex của RegexTokenizer.
-Xử lý dấu ba chấm (...) như một token duy nhất.
-Thêm đối số dòng lệnh cho đường dẫn file dữ liệu để dễ chạy trên các máy khác.
+Lab 1:
+
+Cả hai tokenizer tách tốt câu đơn giản, chuyển chữ thường, tách dấu câu và số. Nhưng từ như "isn't" bị tách thành ['isn', "'", 't'], chưa tối ưu cho NLP.
+Dấu ba chấm (...) thành ba token riêng, có thể cải thiện để xem là một token.
+
+
+Lab 2:
+
+CountVectorizer tạo từ vựng và ma trận đếm đúng, nhưng từ vựng có dấu chấm (.) do RegexTokenizer. Loại bỏ dấu câu sẽ làm từ vựng gọn hơn.
+Ma trận thể hiện tần suất từ, phù hợp cho machine learning.
+
+
+So sánh:
+
+RegexTokenizer ảnh hưởng trực tiếp đến CountVectorizer. Nếu tokenizer tách "isn't" sai, từ vựng sẽ có thêm token thừa (', t), làm giảm chất lượng vector.
+
+
+
+Cải tiến
+
+Sửa RegexTokenizer để giữ "isn't" hoặc ... làm một token.
+Loại dấu câu khỏi từ vựng trong CountVectorizer.
+Thêm đối số dòng lệnh cho đường dẫn file UD_English-EWT.
