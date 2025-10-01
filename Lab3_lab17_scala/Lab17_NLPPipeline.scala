@@ -8,172 +8,166 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import java.io.{File, PrintWriter}
 import java.time.LocalDateTime
 
-object Lab17_NLPPipeline {
+object Lab17_TextProcessing {
   def main(args: Array[String]): Unit = {
-    // Initialize Spark Session
+    // Set up Spark session
     val spark = SparkSession.builder
-      .appName("NLP Pipeline Example")
+      .appName("Text Processing Pipeline")
       .master("local[*]")
       .getOrCreate()
 
     import spark.implicits._
-    println("Spark Session created successfully.")
-    println(s"Spark UI available at http://localhost:4040")
-    println("Pausing for 10 seconds to allow you to open the Spark UI...")
+    println("Spark session initialized.")
+    println("Spark UI accessible at http://localhost:4040")
+    println("Pausing for 10 seconds to view Spark UI...")
     Thread.sleep(10000)
 
-    // Initialize log file
-    val logPath = "../log/lab17_metrics.log"
-    new File(logPath).getParentFile.mkdirs()
-    val logWriter = new PrintWriter(new File(logPath))
-    
-    // Log start time
-    val jobStartTime = LocalDateTime.now()
-    logWriter.println(s"Job Start Time: $jobStartTime")
+    // Create log file
+    val metricsLog = "../logs/lab17_metrics.txt"
+    new File(metricsLog).getParentFile.mkdirs()
+    val logger = new PrintWriter(new File(metricsLog))
+
+    // Record start time
+    val startTime = LocalDateTime.now()
+    logger.println(s"Processing started at: $startTime")
 
     try {
-      // 1. --- Read Dataset ---
-      val dataPath = "../data/c4-train.00000-of-01024-30K.json.gz"
-      val initialDF = spark.read.json(dataPath)
-      val recordCount = initialDF.count()
-      logWriter.println(s"Successfully read $recordCount records.")
-      println(s"Successfully read $recordCount records.")
-      initialDF.printSchema()
-      println("\nSample of initial DataFrame:")
-      initialDF.show(5, truncate = false)
+      // 1. Load input dataset
+      val inputPath = "../data/c4-train.00000-of-01024-30K.json.gz"
+      val rawDF = spark.read.json(inputPath)
+      val totalRecords = rawDF.count()
+      logger.println(s"Loaded $totalRecords records from dataset.")
+      println(s"Loaded $totalRecords records.")
+      rawDF.printSchema()
+      println("\nPreview of raw dataset:")
+      rawDF.show(5, truncate = false)
 
-      // --- Pipeline Stages Definition ---
+      // --- Define Pipeline Components ---
 
-      // 2. --- Tokenization ---
-      val tokenizer = new RegexTokenizer()
+      // 2. Tokenize text
+      val textTokenizer = new RegexTokenizer()
         .setInputCol("text")
-        .setOutputCol("tokens")
+        .setOutputCol("words")
         .setPattern("\\s+|[.,;!?()\"']")
 
-      // 3. --- Stop Words Removal ---
-      val stopWordsRemover = new StopWordsRemover()
-        .setInputCol(tokenizer.getOutputCol)
-        .setOutputCol("filtered_tokens")
+      // 3. Remove stop words
+      val wordsCleaner = new StopWordsRemover()
+        .setInputCol(textTokenizer.getOutputCol)
+        .setOutputCol("cleaned_words")
 
-      // 4. --- Vectorization (Term Frequency) ---
-      // Convert tokens to feature vectors using HashingTF (a fast way to do count vectorization).
-      // setNumFeatures defines the size of the feature vector. This is the maximum number of features
-      // (dimensions) in the output vector. Each word is hashed to an index within this range.
-      //
-      // If setNumFeatures is smaller than the actual vocabulary size (number of unique words),
-      // hash collisions will occur. This means different words will map to the same feature index.
-      // While this leads to some loss of information, it allows for a fixed, manageable vector size
-      // regardless of how large the vocabulary grows, saving memory and computation for very large datasets.
-      // 20,000 is a common starting point for many NLP tasks.
-      val hashingTF = new HashingTF()
-        .setInputCol(stopWordsRemover.getOutputCol)
-        .setOutputCol("raw_features")
+      // 4. Compute term frequency (TF) vectors
+      // HashingTF maps words to a fixed-size feature vector using a hash function.
+      // The number of features (20000) limits the vector size, which may cause hash collisions
+      // if the vocabulary exceeds this limit, but it ensures computational efficiency.
+      val termFreq = new HashingTF()
+        .setInputCol(wordsCleaner.getOutputCol)
+        .setOutputCol("tf_features")
         .setNumFeatures(20000)
 
-      // 5. --- Vectorization (Inverse Document Frequency) ---
-      val idf = new IDF()
-        .setInputCol(hashingTF.getOutputCol)
-        .setOutputCol("features")
+      // 5. Apply inverse document frequency (IDF)
+      val idfTransformer = new IDF()
+        .setInputCol(termFreq.getOutputCol)
+        .setOutputCol("final_features")
 
-      // 6. --- Assemble the Pipeline ---
-      val pipeline = new Pipeline()
-        .setStages(Array(tokenizer, stopWordsRemover, hashingTF, idf))
+      // 6. Build the pipeline
+      val textPipeline = new Pipeline()
+        .setStages(Array(textTokenizer, wordsCleaner, termFreq, idfTransformer))
 
-      // --- Time the main operations ---
-      println("\nFitting the NLP pipeline...")
-      val fitStartTime = System.nanoTime()
-      val pipelineModel = pipeline.fit(initialDF)
-      val fitDuration = (System.nanoTime() - fitStartTime) / 1e9d
-      logWriter.println(f"Pipeline fitting duration: $fitDuration%.2f seconds")
-      println(f"--> Pipeline fitting took $fitDuration%.2f seconds.")
+      // --- Execute Pipeline ---
+      println("\nTraining the text processing pipeline...")
+      val trainStart = System.nanoTime()
+      val trainedModel = textPipeline.fit(rawDF)
+      val trainTime = (System.nanoTime() - trainStart) / 1e9d
+      logger.println(f"Pipeline training completed in $trainTime%.2f seconds")
+      println(f"--> Pipeline training took $trainTime%.2f seconds.")
 
-      println("\nTransforming data with the fitted pipeline...")
-      val transformStartTime = System.nanoTime()
-      val transformedDF = pipelineModel.transform(initialDF)
-      transformedDF.cache()
-      val transformCount = transformedDF.count()
-      val transformDuration = (System.nanoTime() - transformStartTime) / 1e9d
-      logWriter.println(f"Data transformation duration: $transformDuration%.2f seconds")
-      println(f"--> Data transformation of $transformCount records took $transformDuration%.2f seconds.")
+      println("\nApplying pipeline to transform data...")
+      val transformStart = System.nanoTime()
+      val processedDF = trainedModel.transform(rawDF)
+      processedDF.cache()
+      val processedCount = processedDF.count()
+      val transformTime = (System.nanoTime() - transformStart) / 1e9d
+      logger.println(f"Data transformation completed in $transformTime%.2f seconds")
+      println(f"--> Transformed $processedCount records in $transformTime%.2f seconds.")
 
-      // Calculate actual vocabulary size
-      val actualVocabSize = transformedDF
-        .select(explode($"filtered_tokens").as("word"))
+      // Compute unique vocabulary size
+      val vocabSize = processedDF
+        .select(explode($"cleaned_words").as("word"))
         .filter(length($"word") > 1)
         .distinct()
         .count()
-      logWriter.println(s"Actual vocabulary size (after preprocessing): $actualVocabSize unique terms")
-      println(s"--> Actual vocabulary size after tokenization and stop word removal: $actualVocabSize unique terms.")
+      logger.println(s"Unique vocabulary size after processing: $vocabSize terms")
+      println(s"--> Vocabulary size: $vocabSize unique terms.")
 
-      // Log HashingTF settings
-      logWriter.println(s"HashingTF numFeatures set to: 20000")
-      if (20000 < actualVocabSize) {
-        logWriter.println(s"Note: numFeatures (20000) is smaller than actual vocabulary size ($actualVocabSize). Hash collisions are expected.")
+      // Log HashingTF configuration
+      logger.println(s"HashingTF feature vector size: 20000")
+      if (20000 < vocabSize) {
+        logger.println(s"Warning: Feature vector size (20000) is less than vocabulary size ($vocabSize). Hash collisions may occur.")
       }
-      logWriter.println(s"Metrics file generated at: ${new File(logPath).getAbsolutePath}")
+      logger.println(s"Metrics logged at: ${new File(metricsLog).getAbsolutePath}")
 
-      // --- Show and Save Results ---
-      println("\nSample of transformed data:")
-      transformedDF.select("text", "features").show(5, truncate = 50)
+      // --- Display and Save Output ---
+      println("\nSample of processed data:")
+      processedDF.select("text", "final_features").show(5, truncate = 50)
 
-      // 7. --- Save All Results ---
-      val resultPath = "../results"
-      val resultDir = new File(resultPath).getParentFile
-      if (!resultDir.exists()) {
-        resultDir.mkdirs()
-        logWriter.println(s"Created output directory: ${resultDir.getAbsolutePath}")
+      // 7. Save results to disk
+      val outputDir = "../output"
+      val outputParent = new File(outputDir).getParentFile
+      if (!outputParent.exists()) {
+        outputParent.mkdirs()
+        logger.println(s"Created directory: ${outputParent.getAbsolutePath}")
       }
-      // Verify data before writing
-      val outputCount = transformedDF.select("text", "features").count()
-      logWriter.println(s"Number of records to write: $outputCount")
-      println(s"Preparing to write $outputCount records to $resultPath")
+      val outputRecords = processedDF.select("text", "final_features").count()
+      logger.println(s"Records to save: $outputRecords")
+      println(s"Saving $outputRecords records to $outputDir")
 
-      // Concatenate text and features into a single string column
-      val outputDF = transformedDF
-        .select(concat_ws(" | ", 
-          substring($"text", 0, 100), // Truncate text to 100 chars for readability
-          $"features".cast("string")
-        ).as("output"))
-      
-	 outputDF.coalesce(1)
-	  .write
-	  .mode("overwrite")
-	  .text(resultPath)
+      // Format output as text
+      val formattedDF = processedDF
+        .select(concat_ws(" | ",
+          substring($"text", 0, 100), // Limit text to 100 characters
+          $"final_features".cast("string")
+        ).as("result"))
 
-	// Đổi tên file part-* thành lab17_pipeline_output.txt
-	val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
-	val srcFile = fs.globStatus(new Path(s"$resultPath/part-*"))(0).getPath
-	val destFile = new Path(s"$resultPath/lab17_pipeline_output.txt")
+      // Write output
+      formattedDF.coalesce(1)
+        .write
+        .mode("overwrite")
+        .text(outputDir)
 
-	if (fs.exists(destFile)) {
-	  fs.delete(destFile, true) // xóa file cũ nếu tồn tại
-	}
-	fs.rename(srcFile, destFile)
-      
-      logWriter.println(s"Successfully wrote $outputCount results to $resultPath")
-      println(s"Successfully wrote $outputCount records to $resultPath")
+      // Rename output file
+      val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
+      val srcPath = fs.globStatus(new Path(s"$outputDir/part-*"))(0).getPath
+      val destPath = new Path(s"$outputDir/lab17_text_output.txt")
 
-      // Verify the output file exists
-      if (new File(resultPath).exists()) {
-        logWriter.println(s"Output file verified at: ${new File(resultPath).getAbsolutePath}")
+      if (fs.exists(destPath)) {
+        fs.delete(destPath, true)
+      }
+      fs.rename(srcPath, destPath)
+
+      logger.println(s"Saved $outputRecords records to $outputDir")
+      println(s"Saved $outputRecords records to $outputDir")
+
+      // Verify output
+      if (new File(outputDir).exists()) {
+        logger.println(s"Output verified at: ${new File(outputDir).getAbsolutePath}")
       } else {
-        logWriter.println(s"Warning: Output file not found at $resultPath")
-        println(s"Warning: Output file not found at $resultPath")
+        logger.println(s"Warning: Output directory not found at $outputDir")
+        println(s"Warning: Output directory not found at $outputDir")
       }
 
     } catch {
       case e: Exception =>
-        logWriter.println(s"Error occurred: ${e.getMessage}")
-        logWriter.println(s"Stack trace: ${e.getStackTrace.mkString("\n")}")
-        println(s"Error occurred: ${e.getMessage}")
+        logger.println(s"Error encountered: ${e.getMessage}")
+        logger.println(s"Stack trace: ${e.getStackTrace.mkString("\n")}")
+        println(s"Error: ${e.getMessage}")
         throw e
     } finally {
-      // Log end time
-      val jobEndTime = LocalDateTime.now()
-      logWriter.println(s"Job End Time: $jobEndTime")
-      logWriter.close()
+      // Log completion time
+      val endTime = LocalDateTime.now()
+      logger.println(s"Processing ended at: $endTime")
+      logger.close()
       spark.stop()
-      println("Spark Session stopped.")
+      println("Spark session terminated.")
     }
   }
 }
